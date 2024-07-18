@@ -1,13 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:ffi';
 import 'dart:math';
 
+import 'package:powersync/sqlite3.dart';
+import 'package:powersync/src/exceptions.dart';
 import 'package:sqlite_async/sqlite3.dart' as sqlite;
+import 'package:sqlite_async/sqlite3_common.dart';
 import 'package:sqlite_async/sqlite_async.dart';
-
-import 'uuid.dart';
 
 /// Advanced: Define custom setup for each SQLite connection.
 @Deprecated('Use SqliteOpenFactory instead')
@@ -37,9 +38,12 @@ class PowerSyncOpenFactory extends DefaultSqliteOpenFactory {
       : _sqliteSetup = sqliteSetup;
 
   @override
-  sqlite.Database open(SqliteOpenOptions options) {
+  CommonDatabase open(SqliteOpenOptions options) {
     // ignore: deprecated_member_use_from_same_package
     _sqliteSetup?.setup();
+
+    enableExtension();
+
     final db = _retriedOpen(options);
     db.execute('PRAGMA recursive_triggers = TRUE');
     setupFunctions(db);
@@ -57,7 +61,7 @@ class PowerSyncOpenFactory extends DefaultSqliteOpenFactory {
   /// Usually a delay of 1-2ms is sufficient for the next try to succeed, but
   /// we increase the retry delay up to 16ms per retry, and a maximum of 500ms
   /// in total.
-  sqlite.Database _retriedOpen(SqliteOpenOptions options) {
+  CommonDatabase _retriedOpen(SqliteOpenOptions options) {
     final stopwatch = Stopwatch()..start();
     var retryDelay = 2;
     while (stopwatch.elapsedMilliseconds < 500) {
@@ -75,48 +79,24 @@ class PowerSyncOpenFactory extends DefaultSqliteOpenFactory {
     throw AssertionError('Cannot reach this point');
   }
 
-  void setupFunctions(sqlite.Database db) {
-    db.createFunction(
-      functionName: 'uuid',
-      argumentCount: const sqlite.AllowedArgumentCount(0),
-      function: (args) => uuid.v4(),
-    );
-    db.createFunction(
-      // Postgres compatibility
-      functionName: 'gen_random_uuid',
-      argumentCount: const sqlite.AllowedArgumentCount(0),
-      function: (args) => uuid.v4(),
-    );
+  void enableExtension() {
+    var powersyncLib = _getDynamicLibraryForPlatform();
+    sqlite.sqlite3.ensureExtensionLoaded(
+        SqliteExtension.inLibrary(powersyncLib, 'sqlite3_powersync_init'));
+  }
 
-    db.createFunction(
-        functionName: 'powersync_diff',
-        argumentCount: const sqlite.AllowedArgumentCount(2),
-        deterministic: true,
-        directOnly: false,
-        function: (args) {
-          final oldData = jsonDecode(args[0] as String) as Map<String, dynamic>;
-          final newData = jsonDecode(args[1] as String) as Map<String, dynamic>;
+  /// Returns the dynamic library for the current platform.
+  DynamicLibrary _getDynamicLibraryForPlatform() {
+    /// When running tests, we need to load the library for all platforms.
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return DynamicLibrary.open(getLibraryForPlatform());
+    }
+    return (Platform.isIOS || Platform.isMacOS)
+        ? DynamicLibrary.process()
+        : DynamicLibrary.open(getLibraryForPlatform());
+  }
 
-          Map<String, dynamic> result = {};
-
-          for (final newEntry in newData.entries) {
-            final oldValue = oldData[newEntry.key];
-            final newValue = newEntry.value;
-
-            if (newValue != oldValue) {
-              result[newEntry.key] = newValue;
-            }
-          }
-
-          for (final key in oldData.keys) {
-            if (!newData.containsKey(key)) {
-              result[key] = null;
-            }
-          }
-
-          return jsonEncode(result);
-        });
-
+  void setupFunctions(CommonDatabase db) {
     db.createFunction(
       functionName: 'powersync_sleep',
       argumentCount: const sqlite.AllowedArgumentCount(1),
@@ -134,5 +114,35 @@ class PowerSyncOpenFactory extends DefaultSqliteOpenFactory {
         return Isolate.current.debugName;
       },
     );
+  }
+
+  /// Returns the library name for the current platform.
+  /// [path] is optional and is used when the library is not in the default location.
+  String getLibraryForPlatform({String? path}) {
+    switch (Abi.current()) {
+      case Abi.androidArm:
+      case Abi.androidArm64:
+      case Abi.androidX64:
+        return 'libpowersync.so';
+      case Abi.macosArm64:
+      case Abi.macosX64:
+        return 'libpowersync.dylib';
+      case Abi.linuxX64:
+        return 'libpowersync.so';
+      case Abi.windowsArm64:
+      case Abi.windowsX64:
+        return 'powersync.dll';
+      case Abi.androidIA32:
+        throw PowersyncNotReadyException(
+          'Unsupported processor architecture. X86 Android emulators are not '
+          'supported. Please use an x86_64 emulator instead. All physical '
+          'Android devices are supported including 32bit ARM.',
+        );
+      default:
+        throw PowersyncNotReadyException(
+          'Unsupported processor architecture "${Abi.current()}". '
+          'Please open an issue on GitHub to request it.',
+        );
+    }
   }
 }

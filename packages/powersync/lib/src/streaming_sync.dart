@@ -3,6 +3,7 @@ import 'dart:convert' as convert;
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:powersync/src/abort_controller.dart';
 import 'package:powersync/src/exceptions.dart';
 import 'package:powersync/src/log_internal.dart';
 
@@ -32,11 +33,18 @@ class StreamingSyncImplementation {
       StreamController<SyncStatus>.broadcast();
   late final Stream<SyncStatus> statusStream;
 
-  final StreamController _localPingController = StreamController.broadcast();
+  final StreamController<String?> _localPingController =
+      StreamController.broadcast();
 
   final Duration retryDelay;
 
+  final Map<String, dynamic>? syncParameters;
+
   SyncStatus lastStatus = const SyncStatus();
+
+  AbortController? _abort;
+
+  bool _safeToClose = true;
 
   StreamingSyncImplementation(
       {required this.adapter,
@@ -44,39 +52,80 @@ class StreamingSyncImplementation {
       this.invalidCredentialsCallback,
       required this.uploadCrud,
       required this.updateStream,
-      required this.retryDelay}) {
+      required this.retryDelay,
+      this.syncParameters}) {
     _client = http.Client();
     statusStream = _statusStreamController.stream;
   }
 
+  /// Close any active streams.
+  Future<void> abort() async {
+    // If streamingSync() hasn't been called yet, _abort will be null.
+    var future = _abort?.abort();
+    // This immediately triggers a new iteration in the merged stream, allowing us
+    // to break immediately.
+    // However, we still need to close the underlying stream explicitly, otherwise
+    // the break will wait for the next line of data received on the stream.
+    _localPingController.add(null);
+    // According to the documentation, the behavior is undefined when calling
+    // close() while requests are pending. However, this is no other
+    // known way to cancel open streams, and this appears to end the stream with
+    // a consistent ClientException if a request is open.
+    // We avoid closing the client while opening a request, as that does cause
+    // unpredicable uncaught errors.
+    if (_safeToClose) {
+      _client.close();
+    }
+    // wait for completeAbort() to be called
+    await future;
+
+    // Now close the client in all cases not covered above
+    _client.close();
+  }
+
+  bool get aborted {
+    return _abort?.aborted ?? false;
+  }
+
   Future<void> streamingSync() async {
-    crudLoop();
-    var invalidCredentials = false;
-    while (true) {
-      _updateStatus(connecting: true);
-      try {
-        if (invalidCredentials && invalidCredentialsCallback != null) {
-          // This may error. In that case it will be retried again on the next
-          // iteration.
-          await invalidCredentialsCallback!();
-          invalidCredentials = false;
+    try {
+      _abort = AbortController();
+      crudLoop();
+      var invalidCredentials = false;
+      while (!aborted) {
+        _updateStatus(connecting: true);
+        try {
+          if (invalidCredentials && invalidCredentialsCallback != null) {
+            // This may error. In that case it will be retried again on the next
+            // iteration.
+            await invalidCredentialsCallback!();
+            invalidCredentials = false;
+          }
+          await streamingSyncIteration();
+          // Continue immediately
+        } catch (e, stacktrace) {
+          if (aborted && e is http.ClientException) {
+            // Explicit abort requested - ignore. Example error:
+            // ClientException: Connection closed while receiving data, uri=http://localhost:8080/sync/stream
+            return;
+          }
+          final message = _syncErrorMessage(e);
+          isolateLogger.warning('Sync error: $message', e, stacktrace);
+          invalidCredentials = true;
+
+          _updateStatus(
+              connected: false,
+              connecting: true,
+              downloading: false,
+              downloadError: e);
+
+          // On error, wait a little before retrying
+          // When aborting, don't wait
+          await Future.any([Future.delayed(retryDelay), _abort!.onAbort]);
         }
-        await streamingSyncIteration();
-        // Continue immediately
-      } catch (e, stacktrace) {
-        final message = _syncErrorMessage(e);
-        isolateLogger.warning('Sync error: $message', e, stacktrace);
-        invalidCredentials = true;
-
-        _updateStatus(
-            connected: false,
-            connecting: true,
-            downloading: false,
-            downloadError: e);
-
-        // On error, wait a little before retrying
-        await Future.delayed(retryDelay);
       }
+    } finally {
+      _abort!.completeAbort();
     }
   }
 
@@ -152,6 +201,7 @@ class StreamingSyncImplementation {
   /// To clear errors, use [_noError] instead of null.
   void _updateStatus(
       {DateTime? lastSyncedAt,
+      bool? hasSynced,
       bool? connected,
       bool? connecting,
       bool? downloading,
@@ -163,6 +213,7 @@ class StreamingSyncImplementation {
         connected: c,
         connecting: !c && (connecting ?? lastStatus.connecting),
         lastSyncedAt: lastSyncedAt ?? lastStatus.lastSyncedAt,
+        hasSynced: hasSynced ?? lastStatus.hasSynced,
         downloading: downloading ?? lastStatus.downloading,
         uploading: uploading ?? lastStatus.uploading,
         uploadError: uploadError == _noError
@@ -185,9 +236,9 @@ class StreamingSyncImplementation {
       initialBucketStates[entry.bucket] = entry.opId;
     }
 
-    final List<BucketRequest> req = [];
+    final List<BucketRequest> buckets = [];
     for (var entry in initialBucketStates.entries) {
-      req.add(BucketRequest(entry.key, entry.value));
+      buckets.add(BucketRequest(entry.key, entry.value));
     }
 
     Checkpoint? targetCheckpoint;
@@ -195,7 +246,8 @@ class StreamingSyncImplementation {
     Checkpoint? appliedCheckpoint;
     var bucketSet = Set<String>.from(initialBucketStates.keys);
 
-    var requestStream = streamingSyncRequest(StreamingSyncRequest(req));
+    var requestStream =
+        streamingSyncRequest(StreamingSyncRequest(buckets, syncParameters));
 
     var merged = addBroadcast(requestStream, _localPingController.stream);
 
@@ -203,6 +255,10 @@ class StreamingSyncImplementation {
     bool haveInvalidated = false;
 
     await for (var line in merged) {
+      if (aborted) {
+        break;
+      }
+
       _updateStatus(connected: true, connecting: false);
       if (line is Checkpoint) {
         targetCheckpoint = line;
@@ -214,7 +270,6 @@ class StreamingSyncImplementation {
         }
         bucketSet = newBuckets;
         await adapter.removeBuckets([...bucketsToDelete]);
-        adapter.setTargetCheckpoint(targetCheckpoint);
         _updateStatus(downloading: true);
       } else if (line is StreamingSyncCheckpointComplete) {
         final result = await adapter.syncLocalDatabase(targetCheckpoint!);
@@ -242,6 +297,7 @@ class StreamingSyncImplementation {
           throw PowerSyncProtocolException(
               'Checkpoint diff without previous checkpoint');
         }
+        _updateStatus(downloading: true);
         final diff = line;
         final Map<String, BucketChecksum> newBuckets = {};
         for (var checksum in targetCheckpoint.checksums) {
@@ -263,10 +319,9 @@ class StreamingSyncImplementation {
         bucketSet = Set.from(newBuckets.keys);
         await adapter.removeBuckets(diff.removedBuckets);
         adapter.setTargetCheckpoint(targetCheckpoint);
-        _updateStatus(downloading: true);
       } else if (line is SyncBucketData) {
-        await adapter.saveSyncData(SyncDataBatch([line]));
         _updateStatus(downloading: true);
+        await adapter.saveSyncData(SyncDataBatch([line]));
       } else if (line is StreamingSyncKeepalive) {
         if (line.tokenExpiresIn == 0) {
           // Token expired already - stop the connection immediately
@@ -306,6 +361,7 @@ class StreamingSyncImplementation {
             // Continue waiting.
           } else {
             appliedCheckpoint = targetCheckpoint;
+
             _updateStatus(
                 downloading: false,
                 downloadError: _noError,
@@ -335,7 +391,18 @@ class StreamingSyncImplementation {
     request.headers['Authorization'] = "Token ${credentials.token}";
     request.body = convert.jsonEncode(data);
 
-    final res = await _client.send(request);
+    http.StreamedResponse res;
+    try {
+      // Do not close the client during the request phase - this causes uncaught errors.
+      _safeToClose = false;
+      res = await _client.send(request);
+    } finally {
+      _safeToClose = true;
+    }
+    if (aborted) {
+      return;
+    }
+
     if (res.statusCode == 401) {
       if (invalidCredentialsCallback != null) {
         await invalidCredentialsCallback!();
@@ -347,6 +414,9 @@ class StreamingSyncImplementation {
 
     // Note: The response stream is automatically closed when this loop errors
     await for (var line in ndjson(res.stream)) {
+      if (aborted) {
+        break;
+      }
       yield parseStreamingSyncLine(line as Map<String, dynamic>);
     }
   }

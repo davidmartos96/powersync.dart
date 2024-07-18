@@ -1,18 +1,16 @@
 # PowerSync + Supabase Flutter Demo: Todo List App
 
-![docs-supabase-integration](https://github.com/journeyapps/powersync-supabase-flutter-demo/assets/277659/291fa2eb-abe6-4567-8d4b-c88e0ee850cf)
-
-Demo app demonstrating use of the PowerSync SDK for Flutter together with Supabase. For a step-by-step guide, see [here](https://docs.powersync.co/integration-guides/supabase).
+Demo app demonstrating use of the PowerSync SDK for Flutter together with Supabase. For a step-by-step guide, see [here](https://docs.powersync.com/integration-guides/supabase).
 
 # Running the app
 
-Install the Flutter SDK, then:
+Ensure you have [melos](https://melos.invertase.dev/~melos-latest/getting-started) installed.
 
-```sh
-cp lib/app_config_template.dart lib/app_config.dart
-flutter pub get
-flutter run
-```
+1. `cd demos/supabase-todolist`
+2. `melos bootstrap`
+3. `cp lib/app_config_template.dart lib/app_config.dart`
+4. Insert your Supabase and PowerSync project credentials into `lib/app_config.dart` (See instructions below)
+5. `flutter run`
 
 # Set up Supabase Project
 

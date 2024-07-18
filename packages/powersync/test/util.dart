@@ -4,9 +4,9 @@ import 'dart:io';
 
 import 'package:logging/logging.dart';
 import 'package:powersync/powersync.dart';
-import 'package:powersync/sqlite3.dart' as sqlite;
 import 'package:powersync/sqlite_async.dart';
 import 'package:sqlite3/open.dart' as sqlite_open;
+import 'package:sqlite_async/sqlite3_common.dart';
 import 'package:test_api/src/backend/invoker.dart';
 
 const schema = Schema([
@@ -31,11 +31,43 @@ class TestOpenFactory extends PowerSyncOpenFactory {
   TestOpenFactory({required super.path});
 
   @override
-  sqlite.Database open(SqliteOpenOptions options) {
+  CommonDatabase open(SqliteOpenOptions options) {
     sqlite_open.open.overrideFor(sqlite_open.OperatingSystem.linux, () {
       return DynamicLibrary.open('libsqlite3.so.0');
     });
+    sqlite_open.open.overrideFor(sqlite_open.OperatingSystem.macOS, () {
+      return DynamicLibrary.open('libsqlite3.dylib');
+    });
     return super.open(options);
+  }
+
+  @override
+  String getLibraryForPlatform({String? path = "."}) {
+    switch (Abi.current()) {
+      case Abi.androidArm:
+      case Abi.androidArm64:
+      case Abi.androidX64:
+        return '$path/libpowersync.so';
+      case Abi.macosArm64:
+      case Abi.macosX64:
+        return '$path/libpowersync.dylib';
+      case Abi.linuxX64:
+        return '$path/libpowersync.so';
+      case Abi.windowsArm64:
+      case Abi.windowsX64:
+        return '$path/powersync.dll';
+      case Abi.androidIA32:
+        throw PowersyncNotReadyException(
+          'Unsupported processor architecture. X86 Android emulators are not '
+          'supported. Please use an x86_64 emulator instead. All physical '
+          'Android devices are supported including 32bit ARM.',
+        );
+      default:
+        throw PowersyncNotReadyException(
+          'Unsupported processor architecture "${Abi.current()}". '
+          'Please open an issue on GitHub to request it.',
+        );
+    }
   }
 }
 
@@ -46,7 +78,7 @@ Future<PowerSyncDatabase> setupPowerSync(
   return db;
 }
 
-Future<sqlite.Database> setupSqlite(
+Future<CommonDatabase> setupSqlite(
     {required PowerSyncDatabase powersync}) async {
   await powersync.initialize();
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:powersync_flutter_demo/database.dart';
+import 'package:powersync_flutter_demo/models/todo_list.dart';
 import 'package:powersync_flutter_demo/powersync.dart';
 
 import '../main.dart';
@@ -53,7 +54,9 @@ class ListsWidget extends StatefulWidget {
 
 class _ListsWidgetState extends State<ListsWidget> {
   List<ListItemWithStats> _data = [];
+  bool hasSynced = false;
   StreamSubscription? _subscription;
+  StreamSubscription? _syncStatusSubscription;
 
   _ListsWidgetState();
 
@@ -62,11 +65,19 @@ class _ListsWidgetState extends State<ListsWidget> {
     super.initState();
     final stream = appDb.watchListsWithStats();
     _subscription = stream.listen((data) {
-      if (!mounted) {
+      if (!context.mounted) {
         return;
       }
       setState(() {
         _data = data;
+      });
+    });
+    _syncStatusSubscription = TodoList.watchSyncStatus().listen((status) {
+      if (!context.mounted) {
+        return;
+      }
+      setState(() {
+        hasSynced = status.hasSynced ?? false;
       });
     });
   }
@@ -75,15 +86,18 @@ class _ListsWidgetState extends State<ListsWidget> {
   void dispose() {
     super.dispose();
     _subscription?.cancel();
+    _syncStatusSubscription?.cancel();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      children: _data.map((list) {
-        return ListItemWidget(list: list);
-      }).toList(),
-    );
+    return !hasSynced
+        ? const Text("Busy with sync...")
+        : ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            children: _data.map((list) {
+              return ListItemWidget(list: list);
+            }).toList(),
+          );
   }
 }
