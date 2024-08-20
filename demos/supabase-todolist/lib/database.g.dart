@@ -35,8 +35,15 @@ class $ListItemsTable extends ListItems
   late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
       'owner_id', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _archivedMeta =
+      const VerificationMeta('archived');
   @override
-  List<GeneratedColumn> get $columns => [id, createdAt, name, ownerId];
+  late final GeneratedColumn<int> archived = GeneratedColumn<int>(
+      'archived', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, createdAt, name, ownerId, archived];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -64,6 +71,12 @@ class $ListItemsTable extends ListItems
       context.handle(_ownerIdMeta,
           ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta));
     }
+    if (data.containsKey('archived')) {
+      context.handle(_archivedMeta,
+          archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta));
+    } else if (isInserting) {
+      context.missing(_archivedMeta);
+    }
     return context;
   }
 
@@ -81,6 +94,8 @@ class $ListItemsTable extends ListItems
           .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
       ownerId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}owner_id']),
+      archived: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}archived'])!,
     );
   }
 
@@ -95,11 +110,13 @@ class ListItem extends DataClass implements Insertable<ListItem> {
   final DateTime createdAt;
   final String name;
   final String? ownerId;
+  final int archived;
   const ListItem(
       {required this.id,
       required this.createdAt,
       required this.name,
-      this.ownerId});
+      this.ownerId,
+      required this.archived});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -109,6 +126,7 @@ class ListItem extends DataClass implements Insertable<ListItem> {
     if (!nullToAbsent || ownerId != null) {
       map['owner_id'] = Variable<String>(ownerId);
     }
+    map['archived'] = Variable<int>(archived);
     return map;
   }
 
@@ -120,6 +138,7 @@ class ListItem extends DataClass implements Insertable<ListItem> {
       ownerId: ownerId == null && nullToAbsent
           ? const Value.absent()
           : Value(ownerId),
+      archived: Value(archived),
     );
   }
 
@@ -131,6 +150,7 @@ class ListItem extends DataClass implements Insertable<ListItem> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       name: serializer.fromJson<String>(json['name']),
       ownerId: serializer.fromJson<String?>(json['ownerId']),
+      archived: serializer.fromJson<int>(json['archived']),
     );
   }
   @override
@@ -141,6 +161,7 @@ class ListItem extends DataClass implements Insertable<ListItem> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'name': serializer.toJson<String>(name),
       'ownerId': serializer.toJson<String?>(ownerId),
+      'archived': serializer.toJson<int>(archived),
     };
   }
 
@@ -148,12 +169,14 @@ class ListItem extends DataClass implements Insertable<ListItem> {
           {String? id,
           DateTime? createdAt,
           String? name,
-          Value<String?> ownerId = const Value.absent()}) =>
+          Value<String?> ownerId = const Value.absent(),
+          int? archived}) =>
       ListItem(
         id: id ?? this.id,
         createdAt: createdAt ?? this.createdAt,
         name: name ?? this.name,
         ownerId: ownerId.present ? ownerId.value : this.ownerId,
+        archived: archived ?? this.archived,
       );
   @override
   String toString() {
@@ -161,13 +184,14 @@ class ListItem extends DataClass implements Insertable<ListItem> {
           ..write('id: $id, ')
           ..write('createdAt: $createdAt, ')
           ..write('name: $name, ')
-          ..write('ownerId: $ownerId')
+          ..write('ownerId: $ownerId, ')
+          ..write('archived: $archived')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, createdAt, name, ownerId);
+  int get hashCode => Object.hash(id, createdAt, name, ownerId, archived);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -175,7 +199,8 @@ class ListItem extends DataClass implements Insertable<ListItem> {
           other.id == this.id &&
           other.createdAt == this.createdAt &&
           other.name == this.name &&
-          other.ownerId == this.ownerId);
+          other.ownerId == this.ownerId &&
+          other.archived == this.archived);
 }
 
 class ListItemsCompanion extends UpdateCompanion<ListItem> {
@@ -183,12 +208,14 @@ class ListItemsCompanion extends UpdateCompanion<ListItem> {
   final Value<DateTime> createdAt;
   final Value<String> name;
   final Value<String?> ownerId;
+  final Value<int> archived;
   final Value<int> rowid;
   const ListItemsCompanion({
     this.id = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.name = const Value.absent(),
     this.ownerId = const Value.absent(),
+    this.archived = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ListItemsCompanion.insert({
@@ -196,13 +223,16 @@ class ListItemsCompanion extends UpdateCompanion<ListItem> {
     this.createdAt = const Value.absent(),
     required String name,
     this.ownerId = const Value.absent(),
+    required int archived,
     this.rowid = const Value.absent(),
-  }) : name = Value(name);
+  })  : name = Value(name),
+        archived = Value(archived);
   static Insertable<ListItem> custom({
     Expression<String>? id,
     Expression<DateTime>? createdAt,
     Expression<String>? name,
     Expression<String>? ownerId,
+    Expression<int>? archived,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -210,6 +240,7 @@ class ListItemsCompanion extends UpdateCompanion<ListItem> {
       if (createdAt != null) 'created_at': createdAt,
       if (name != null) 'name': name,
       if (ownerId != null) 'owner_id': ownerId,
+      if (archived != null) 'archived': archived,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -219,12 +250,14 @@ class ListItemsCompanion extends UpdateCompanion<ListItem> {
       Value<DateTime>? createdAt,
       Value<String>? name,
       Value<String?>? ownerId,
+      Value<int>? archived,
       Value<int>? rowid}) {
     return ListItemsCompanion(
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
       name: name ?? this.name,
       ownerId: ownerId ?? this.ownerId,
+      archived: archived ?? this.archived,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -244,6 +277,9 @@ class ListItemsCompanion extends UpdateCompanion<ListItem> {
     if (ownerId.present) {
       map['owner_id'] = Variable<String>(ownerId.value);
     }
+    if (archived.present) {
+      map['archived'] = Variable<int>(archived.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -257,6 +293,7 @@ class ListItemsCompanion extends UpdateCompanion<ListItem> {
           ..write('createdAt: $createdAt, ')
           ..write('name: $name, ')
           ..write('ownerId: $ownerId, ')
+          ..write('archived: $archived, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -739,7 +776,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TodoItemsTable todoItems = $TodoItemsTable(this);
   Selectable<ListItemWithStats> listsWithStats() {
     return customSelect(
-        'SELECT"self"."id" AS "nested_0.id", "self"."created_at" AS "nested_0.created_at", "self"."name" AS "nested_0.name", "self"."owner_id" AS "nested_0.owner_id", (SELECT count() FROM todos WHERE list_id = self.id AND completed = TRUE) AS completed_count, (SELECT count() FROM todos WHERE list_id = self.id AND completed = FALSE) AS pending_count FROM lists AS self ORDER BY created_at',
+        'SELECT"self"."id" AS "nested_0.id", "self"."created_at" AS "nested_0.created_at", "self"."name" AS "nested_0.name", "self"."owner_id" AS "nested_0.owner_id", "self"."archived" AS "nested_0.archived", (SELECT count() FROM todos WHERE list_id = self.id AND completed = TRUE) AS completed_count, (SELECT count() FROM todos WHERE list_id = self.id AND completed = FALSE) AS pending_count FROM lists AS self ORDER BY created_at',
         variables: [],
         readsFrom: {
           todoItems,
@@ -766,6 +803,7 @@ typedef $$ListItemsTableInsertCompanionBuilder = ListItemsCompanion Function({
   Value<DateTime> createdAt,
   required String name,
   Value<String?> ownerId,
+  required int archived,
   Value<int> rowid,
 });
 typedef $$ListItemsTableUpdateCompanionBuilder = ListItemsCompanion Function({
@@ -773,6 +811,7 @@ typedef $$ListItemsTableUpdateCompanionBuilder = ListItemsCompanion Function({
   Value<DateTime> createdAt,
   Value<String> name,
   Value<String?> ownerId,
+  Value<int> archived,
   Value<int> rowid,
 });
 
@@ -800,6 +839,7 @@ class $$ListItemsTableTableManager extends RootTableManager<
             Value<DateTime> createdAt = const Value.absent(),
             Value<String> name = const Value.absent(),
             Value<String?> ownerId = const Value.absent(),
+            Value<int> archived = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               ListItemsCompanion(
@@ -807,6 +847,7 @@ class $$ListItemsTableTableManager extends RootTableManager<
             createdAt: createdAt,
             name: name,
             ownerId: ownerId,
+            archived: archived,
             rowid: rowid,
           ),
           getInsertCompanionBuilder: ({
@@ -814,6 +855,7 @@ class $$ListItemsTableTableManager extends RootTableManager<
             Value<DateTime> createdAt = const Value.absent(),
             required String name,
             Value<String?> ownerId = const Value.absent(),
+            required int archived,
             Value<int> rowid = const Value.absent(),
           }) =>
               ListItemsCompanion.insert(
@@ -821,6 +863,7 @@ class $$ListItemsTableTableManager extends RootTableManager<
             createdAt: createdAt,
             name: name,
             ownerId: ownerId,
+            archived: archived,
             rowid: rowid,
           ),
         ));
@@ -861,6 +904,11 @@ class $$ListItemsTableFilterComposer
       builder: (column, joinBuilders) =>
           ColumnFilters(column, joinBuilders: joinBuilders));
 
+  ColumnFilters<int> get archived => $state.composableBuilder(
+      column: $state.table.archived,
+      builder: (column, joinBuilders) =>
+          ColumnFilters(column, joinBuilders: joinBuilders));
+
   ComposableFilter todoItemsRefs(
       ComposableFilter Function($$TodoItemsTableFilterComposer f) f) {
     final $$TodoItemsTableFilterComposer composer = $state.composerBuilder(
@@ -895,6 +943,11 @@ class $$ListItemsTableOrderingComposer
 
   ColumnOrderings<String> get ownerId => $state.composableBuilder(
       column: $state.table.ownerId,
+      builder: (column, joinBuilders) =>
+          ColumnOrderings(column, joinBuilders: joinBuilders));
+
+  ColumnOrderings<int> get archived => $state.composableBuilder(
+      column: $state.table.archived,
       builder: (column, joinBuilders) =>
           ColumnOrderings(column, joinBuilders: joinBuilders));
 }

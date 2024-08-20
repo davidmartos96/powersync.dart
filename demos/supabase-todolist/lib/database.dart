@@ -30,6 +30,7 @@ class ListItems extends Table {
       dateTime().named('created_at').clientDefault(() => DateTime.now())();
   TextColumn get name => text()();
   TextColumn get ownerId => text().nullable().named('owner_id')();
+  IntColumn get archived => integer().named('archived')();
 }
 
 class ListItemWithStats {
@@ -63,12 +64,20 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<ListItem> createList(String name) async {
-    return into(listItems).insertReturning(
-        ListItemsCompanion.insert(name: name, ownerId: Value(getUserId())));
+    return into(listItems).insertReturning(ListItemsCompanion.insert(
+      name: name,
+      ownerId: Value(getUserId()),
+      archived: 0,
+    ));
   }
 
   Future<void> deleteList(ListItem list) async {
     await (delete(listItems)..where((t) => t.id.equals(list.id))).go();
+  }
+
+  Future<void> archiveList(ListItem list, bool archive) async {
+    await (update(listItems)..where((t) => t.id.equals(list.id)))
+        .write(ListItemsCompanion(archived: Value(archive ? 1 : 0)));
   }
 
   Stream<List<TodoItem>> watchTodoItems(ListItem list) {

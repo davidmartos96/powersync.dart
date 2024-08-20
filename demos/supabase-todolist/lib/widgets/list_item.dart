@@ -16,6 +16,10 @@ class ListItemWidget extends StatelessWidget {
     await appDb.deleteList(list.self);
   }
 
+  Future<void> archive(bool archive) async {
+    await appDb.archiveList(list.self, archive);
+  }
+
   @override
   Widget build(BuildContext context) {
     viewList() {
@@ -28,6 +32,7 @@ class ListItemWidget extends StatelessWidget {
     final subtext =
         '${list.pendingCount} pending, ${list.completedCount} completed';
 
+    final isArchived = list.self.archived == 1;
     return Card(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -40,6 +45,19 @@ class ListItemWidget extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
+              if (isArchived) const Text("ARCHIVED"),
+              IconButton(
+                iconSize: 30,
+                icon: Icon(
+                  isArchived ? Icons.unarchive : Icons.archive,
+                  color: isArchived ? Colors.green : Colors.amber,
+                ),
+                tooltip: 'Archive List',
+                alignment: Alignment.centerRight,
+                onPressed: () {
+                  archive(!isArchived);
+                },
+              ),
               IconButton(
                 iconSize: 30,
                 icon: const Icon(

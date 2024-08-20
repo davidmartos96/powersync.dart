@@ -68,6 +68,7 @@ class _ListsWidgetState extends State<ListsWidget> {
       if (!context.mounted) {
         return;
       }
+      print("Got data: $data");
       setState(() {
         _data = data;
       });

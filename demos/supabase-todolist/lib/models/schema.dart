@@ -21,6 +21,7 @@ Schema schema = Schema(([
     Column.text('created_at'),
     Column.text('name'),
     Column.text('owner_id'),
+    Column.integer('archived'),
   ]),
   AttachmentsQueueTable(
       attachmentsQueueTableName: defaultAttachmentsQueueTableName)
