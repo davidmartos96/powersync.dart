@@ -155,8 +155,7 @@ Future<void> openDatabase() async {
   final dbPath = await getDatabasePath();
   print("Opening database at $dbPath");
   // Open the local database
-  db = PowerSyncDatabase(
-      schema: schema, path: dbPath, logger: attachedLogger);
+  db = PowerSyncDatabase(schema: schema, path: dbPath, logger: attachedLogger);
   await db.initialize();
   appDb = AppDatabase(db);
 

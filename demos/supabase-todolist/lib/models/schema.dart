@@ -20,7 +20,7 @@ Schema schema = Schema(([
   const Table('lists', [
     Column.text('created_at'),
     Column.text('name'),
-    Column.text('owner_id')
+    Column.text('owner_id'),
   ]),
   AttachmentsQueueTable(
       attachmentsQueueTableName: defaultAttachmentsQueueTableName)

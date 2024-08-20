@@ -33,3 +33,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependency_overrides:
+  drift_sqlite_async: 
+    path: /Users/jorge/Developer/ManaBox/sqlite_async.dart/packages/drift_sqlite_async

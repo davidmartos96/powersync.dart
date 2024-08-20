@@ -9,11 +9,7 @@ import '../powersync.dart';
 /// This class is immutable - methods on this class do not modify the instance
 /// directly. Instead, watch or re-query the data to get the updated list.
 class TodoList {
-
-
   static Stream<SyncStatus> watchSyncStatus() {
     return db.statusStream;
   }
-
- 
 }
