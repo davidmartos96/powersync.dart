@@ -351,6 +351,10 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
         SyncStatus(connected: false, lastSyncedAt: currentStatus.lastSyncedAt));
   }
 
+  Future<void> abortCurrentConnection() async {
+    await _abortCurrentSync();
+  }
+
   Future<void> _abortCurrentSync() async {
     if (_abortActiveSync case final disconnector?) {
       /// Checking `disconnecter.aborted` prevents race conditions
