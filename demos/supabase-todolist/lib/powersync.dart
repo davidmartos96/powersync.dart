@@ -5,6 +5,7 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:powersync/powersync.dart';
 import 'package:powersync_flutter_demo/migrations/fts_setup.dart';
+import 'package:powersync_flutter_demo/raw_tables_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import './app_config.dart';
@@ -157,8 +158,17 @@ Future<void> openDatabase() async {
   final dbPath = await getDatabasePath();
   print("Opening database at $dbPath");
   // Open the local database
-  db = PowerSyncDatabase(schema: schema, path: dbPath, logger: attachedLogger);
+  db = PowerSyncDatabase(
+    schema: schema,
+    path: dbPath,
+    logger: attachedLogger,
+    manualSchemaManagement: true,
+  );
   await db.initialize();
+
+  await initializeRawTablesSchema(db);
+  await db.updateSchema(schema);
+  await db.markSchemaAsReady();
 
   await loadSupabase();
 
@@ -168,7 +178,10 @@ Future<void> openDatabase() async {
     // If the user is already logged in, connect immediately.
     // Otherwise, connect once logged in.
     currentConnector = SupabaseConnector();
-    db.connect(connector: currentConnector);
+    db.connect(
+      connector: currentConnector,
+      options: SyncOptions(syncImplementation: SyncClientImplementation.rust),
+    );
   }
 
   Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
