@@ -74,7 +74,7 @@ abstract mixin class TestPowerSyncFactory implements PowerSyncOpenFactory {
       schema: schema,
       database: SqliteDatabase.singleConnection(
           SqliteConnection.synchronousWrapper(raw)),
-      loggers: logger,
+      logger: logger,
     );
   }
 }
@@ -154,6 +154,7 @@ extension MockSync on PowerSyncDatabase {
   }) {
     final impl = StreamingSyncImplementation(
       adapter: BucketStorage(this),
+      schema: schema,
       client: client,
       options: ResolvedSyncOptions(options),
       connector: InternalConnector.wrap(connector, this),

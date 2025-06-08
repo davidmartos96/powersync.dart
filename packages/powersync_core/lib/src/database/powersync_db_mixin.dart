@@ -38,6 +38,10 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
   /// Use [attachedLogger] to propagate logs to [Logger.root] for custom logging.
   Logger get logger;
 
+  bool get manualSchemaManagement;
+
+  bool _manualSchemaManagementCompleted = false;
+
   @Deprecated("This field is unused, pass params to connect() instead")
   Map<String, dynamic>? clientParams;
 
@@ -110,10 +114,36 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
     statusStream = statusStreamController.stream;
     updates = powerSyncUpdateNotifications(database.updates);
 
+    _manualSchemaManagementCompleted = false;
+
     await database.initialize();
     await _checkVersion();
     await database.execute('SELECT powersync_init()');
-    await updateSchema(schema);
+
+    if (!manualSchemaManagement) {
+      // Create the internal db schema
+      await updateSchema(schema);
+      await _afterSchemaReady();
+    }
+  }
+
+  Future<void> markSchemaAsReady() async {
+    await isInitialized;
+    _manualSchemaManagementCompleted = true;
+
+    await _afterSchemaReady();
+  }
+
+  void _assertSchemaIsReady() {
+    if (!manualSchemaManagement || _manualSchemaManagementCompleted) {
+      return;
+    }
+
+    throw AssertionError(
+        'In manual schema management mode, you need to mark the powersync database as ready');
+  }
+
+  Future<void> _afterSchemaReady() async {
     await _updateHasSynced();
   }
 
@@ -289,11 +319,14 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
     // the lock for the connection.
     await initialize();
 
-    final resolvedOptions = SyncOptions(
-      crudThrottleTime: options?.crudThrottleTime ?? crudThrottleTime,
+    _assertSchemaIsReady();
+
+    final resolvedOptions = ResolvedSyncOptions.resolve(
+      options,
+      crudThrottleTime: crudThrottleTime,
       // ignore: deprecated_member_use_from_same_package
-      retryDelay: options?.retryDelay ?? retryDelay,
-      params: options?.params ?? params,
+      retryDelay: retryDelay,
+      params: params,
     );
 
     // ignore: deprecated_member_use_from_same_package
@@ -362,7 +395,7 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
   @internal
   Future<void> connectInternal({
     required PowerSyncBackendConnector connector,
-    required SyncOptions options,
+    required ResolvedSyncOptions options,
     required AbortController abort,
     required Zone asyncWorkZone,
   });
@@ -451,6 +484,7 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
   /// Get an unique id for this client.
   /// This id is only reset when the database is deleted.
   Future<String> getClientId() async {
+    _assertSchemaIsReady(); // TODO(skilldevs): Needed?
     final row = await get('SELECT powersync_client_id() as client_id');
     return row['client_id'] as String;
   }
@@ -458,6 +492,7 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
   /// Get upload queue size estimate and count.
   Future<UploadQueueStats> getUploadQueueStats(
       {bool includeSize = false}) async {
+    _assertSchemaIsReady();
     if (includeSize) {
       final row = await getOptional(
           'SELECT SUM(cast(data as blob) + 20) as size, count(*) as count FROM ps_crud');
@@ -485,6 +520,7 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
   /// data by transaction. One batch may contain data from multiple transactions,
   /// and a single transaction may be split over multiple batches.
   Future<CrudBatch?> getCrudBatch({int limit = 100}) async {
+    _assertSchemaIsReady();
     final rows = await getAll(
         'SELECT id, tx_id, data FROM ps_crud ORDER BY id ASC LIMIT ?',
         [limit + 1]);
@@ -531,6 +567,7 @@ mixin PowerSyncDatabaseMixin implements SqliteConnection {
   /// Unlike [getCrudBatch], this only returns data from a single transaction at a time.
   /// All data for the transaction is loaded into memory.
   Future<CrudTransaction?> getNextCrudTransaction() async {
+    _assertSchemaIsReady();
     return await readTransaction((tx) async {
       final first = await tx.getOptional(
           'SELECT id, tx_id, data FROM ps_crud ORDER BY id ASC LIMIT 1');
