@@ -65,7 +65,6 @@ Future<void> configureFts(PowerSyncDatabase db) async {
     // ..add(createFtsMigration(
     //     migrationVersion: 1,
     //     tableName: 'lists',
-    //     isRawTable: true,
     //     columns: ['name'],
     //     tokenizationMethod: 'porter unicode61'))
     ..add(createFtsMigration(
