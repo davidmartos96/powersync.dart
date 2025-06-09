@@ -36,7 +36,8 @@ Map<int, Future<void> Function(SqliteWriteContext)> _migrationsMap = {
 
 Future<void> _migrateFrom0(SqliteWriteContext ctx) async {
   await _createListsRawTable(ctx);
-  await insertListTriggers(ctx);
+  // await insertListTriggers(ctx);
+  await _updateListTrigger(ctx);
 }
 
 Future<void> _createListsRawTable(SqliteWriteContext ctx) async {
@@ -52,7 +53,16 @@ CREATE TABLE IF NOT EXISTS $listsRawTable(
 
 Future<void> insertListTriggers(SqliteWriteContext ctx) async {
   final table = listsRawTable;
-  final dataJsonExpr = "json(json_object('created_at', NEW.created_at, 'name', NEW.name, 'owner_id', NEW.owner_id))";
+  final dataJsonExpr = 'json(${_buildJsonObjectExpression(
+    columns: [
+      'created_at',
+      'name',
+      'owner_id',
+    ],
+    columnPrefix: 'NEW',
+  )})';
+  // final dataJsonExpr =
+  //     "json(json_object('created_at', NEW.created_at, 'name', NEW.name, 'owner_id', NEW.owner_id))";
 
   final insert = '''
 INSERT INTO powersync_crud_(data)
@@ -79,6 +89,52 @@ CREATE TRIGGER fts_insert_trigger_todos AFTER INSERT ON ps_data__todos
       INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('$local', 0, 9223372036854775807);
       END
 '''); */
+}
+
+String _buildJsonObjectExpression(
+    {required List<String> columns, String? columnPrefix}) {
+  final list = columns.map((columnName) {
+    final String key = "'$columnName'";
+    final String value =
+        columnPrefix != null ? '$columnPrefix.$columnName' : columnName;
+    return '$key, $value';
+  }).join(', ');
+
+  return "json_object($list)";
+}
+
+Future<void> _updateListTrigger(SqliteWriteContext ctx) async {
+  final table = listsRawTable;
+  final columns = [
+    'created_at',
+    'name',
+    'owner_id',
+  ];
+  final newRowJsonObj = 'json(${_buildJsonObjectExpression(
+    columns: columns,
+    columnPrefix: 'NEW',
+  )})';
+
+  final oldRowJsonObj = 'json(${_buildJsonObjectExpression(
+    columns: columns,
+    columnPrefix: 'OLD',
+  )})';
+
+  await ctx.execute('''
+CREATE TRIGGER ${table}_update
+AFTER UPDATE ON $table
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+  WHEN (OLD.id != NEW.id)
+  THEN RAISE (FAIL, 'Cannot update id')
+  END;
+  INSERT INTO powersync_crud_(data, options)
+  VALUES(json_object('op', 'PATCH', 'type', '$table', 'id', NEW.id, 'data', json(powersync_diff($oldRowJsonObj, $newRowJsonObj))), 0);
+  --INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('todos', NEW.id);
+  --INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
+END
+''');
 }
 
 Future<void> _setupSchemaVersionTable(PowerSyncDatabase db) async {

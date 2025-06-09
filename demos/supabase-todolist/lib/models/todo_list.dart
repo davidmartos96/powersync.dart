@@ -105,4 +105,14 @@ class TodoList {
     ''', [id, description, getUserId()]);
     return TodoItem.fromRow(results.first);
   }
+
+  Future<TodoList> updateName(String newName) async {
+    final results = await db.execute('''
+      UPDATE lists
+      SET name = ?
+      WHERE id = ?
+      RETURNING *
+    ''', [newName, id]);
+    return TodoList.fromRow(results.first);
+  }
 }
