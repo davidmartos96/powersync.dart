@@ -2,6 +2,7 @@ import 'package:powersync/powersync.dart';
 import 'package:powersync_flutter_demo/models/schema.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
+// A table to hold a custom schema version number
 const _versionTable = 'custom_schema_version';
 const latestSchemaVersion = 1;
 
@@ -20,6 +21,7 @@ Future<void> initializeRawTablesSchema(PowerSyncDatabase db) async {
           "Database is in a newer version than expected ($schemaVersion)");
     }
 
+    print("Migrating from custom db schema version $schemaVersion to $latestSchemaVersion");
     for (var i = schemaVersion; i < latestSchemaVersion; i++) {
       assert(_migrationsMap.containsKey(i),
           'Migrations map is missing migration from version $i');
@@ -36,8 +38,10 @@ Map<int, Future<void> Function(SqliteWriteContext)> _migrationsMap = {
 
 Future<void> _migrateFrom0(SqliteWriteContext ctx) async {
   await _createListsRawTable(ctx);
-  // await insertListTriggers(ctx);
-  await _updateListTrigger(ctx);
+  // Triggers
+  await _createInsertListTriggers(ctx);
+  await _createUpdateListTrigger(ctx);
+  await _createDeleteListTrigger(ctx);
 }
 
 Future<void> _createListsRawTable(SqliteWriteContext ctx) async {
@@ -51,7 +55,7 @@ CREATE TABLE IF NOT EXISTS $listsRawTable(
 ''');
 }
 
-Future<void> insertListTriggers(SqliteWriteContext ctx) async {
+Future<void> _createInsertListTriggers(SqliteWriteContext ctx) async {
   final table = listsRawTable;
   final dataJsonExpr = 'json(${_buildJsonObjectExpression(
     columns: [
@@ -61,34 +65,18 @@ Future<void> insertListTriggers(SqliteWriteContext ctx) async {
     ],
     columnPrefix: 'NEW',
   )})';
-  // final dataJsonExpr =
-  //     "json(json_object('created_at', NEW.created_at, 'name', NEW.name, 'owner_id', NEW.owner_id))";
-
-  final insert = '''
-INSERT INTO powersync_crud_(data)
-VALUES(json_object('op', 'PUT', 'type', '$table', 'id', NEW.id, 'data', $dataJsonExpr));
-''';
 
   await ctx.execute('''
 CREATE TRIGGER IF NOT EXISTS ${table}_insert
 AFTER INSERT ON $table
 FOR EACH ROW
---WHEN NOT powersync_in_sync_operation()
+WHEN NOT powersync_in_sync_operation()
 BEGIN
-  $insert
+  INSERT INTO powersync_crud_(data) VALUES(json_object('op', 'PUT', 'type', '$table', 'id', NEW.id, 'data', $dataJsonExpr));
+  INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', NEW.id);
+  INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
 END;
 ''');
-
-// Default insert trigger from powersync
-  /*
-  await ctx.execute('''
-CREATE TRIGGER fts_insert_trigger_todos AFTER INSERT ON ps_data__todos
-      BEGIN
-        INSERT INTO powersync_crud_(data) VALUES(json_object('op', 'PUT', 'type', 'todos', 'id', NEW.id, 'data', json(powersync_diff('{}', json_object('list_id', NEW."list_id", 'photo_id', NEW."photo_id", 'created_at', NEW."created_at", 'completed_at', NEW."completed_at", 'description', NEW."description", 'completed', NEW."completed", 'created_by', NEW."created_by", 'completed_by', NEW."completed_by")))));
-      INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('todos', NEW.id);
-      INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('$local', 0, 9223372036854775807);
-      END
-'''); */
 }
 
 String _buildJsonObjectExpression(
@@ -103,7 +91,7 @@ String _buildJsonObjectExpression(
   return "json_object($list)";
 }
 
-Future<void> _updateListTrigger(SqliteWriteContext ctx) async {
+Future<void> _createUpdateListTrigger(SqliteWriteContext ctx) async {
   final table = listsRawTable;
   final columns = [
     'created_at',
@@ -131,8 +119,22 @@ BEGIN
   END;
   INSERT INTO powersync_crud_(data, options)
   VALUES(json_object('op', 'PATCH', 'type', '$table', 'id', NEW.id, 'data', json(powersync_diff($oldRowJsonObj, $newRowJsonObj))), 0);
-  --INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('todos', NEW.id);
-  --INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
+  INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', NEW.id);
+  INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
+END
+''');
+}
+
+Future<void> _createDeleteListTrigger(SqliteWriteContext ctx) async {
+  final table = listsRawTable;
+  await ctx.execute('''
+CREATE TRIGGER ${table}_delete
+AFTER DELETE ON $table
+FOR EACH ROW
+BEGIN
+  INSERT INTO powersync_crud_(data) VALUES(json_object('op', 'DELETE', 'type', '$table', 'id', OLD.id));
+  INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', OLD.id);
+  INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
 END
 ''');
 }
