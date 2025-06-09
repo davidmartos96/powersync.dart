@@ -112,6 +112,7 @@ Future<void> _createUpdateListTrigger(SqliteWriteContext ctx) async {
 CREATE TRIGGER ${table}_update
 AFTER UPDATE ON $table
 FOR EACH ROW
+WHEN NOT powersync_in_sync_operation()
 BEGIN
   SELECT CASE
   WHEN (OLD.id != NEW.id)
@@ -131,6 +132,7 @@ Future<void> _createDeleteListTrigger(SqliteWriteContext ctx) async {
 CREATE TRIGGER ${table}_delete
 AFTER DELETE ON $table
 FOR EACH ROW
+WHEN NOT powersync_in_sync_operation()
 BEGIN
   INSERT INTO powersync_crud_(data) VALUES(json_object('op', 'DELETE', 'type', '$table', 'id', OLD.id));
   INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', OLD.id);
