@@ -164,13 +164,15 @@ Future<void> openDatabase() async {
     schema: schema,
     path: dbPath,
     logger: attachedLogger,
-    manualSchemaManagement: true,
+    manualSchemaManagement: manualSchemaMngmtMode,
   );
   await db.initialize();
 
-  await initializeRawTablesSchema(db);
-  await db.updateSchema(schema);
-  await db.markSchemaAsReady();
+  if (manualSchemaMngmtMode) {
+    await initializeRawTablesSchema(db);
+    await db.updateSchema(schema);
+    await db.markSchemaAsReady();
+  }
 
   await loadSupabase();
 
