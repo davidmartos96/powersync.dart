@@ -37,15 +37,15 @@ Schema schema = Schema([
         sql:
             "INSERT OR REPLACE INTO $listsRawTable (id, created_at, name, owner_id) VALUES (?, ?, ?, ?);",
         params: [
-          PendingStmtValueId(),
-          PendingStmtValueColumn('created_at'),
-          PendingStmtValueColumn('name'),
-          PendingStmtValueColumn('owner_id'),
+          PendingStatementValue.id(),
+          PendingStatementValue.column('created_at'),
+          PendingStatementValue.column('name'),
+          PendingStatementValue.column('owner_id'),
         ],
       ),
       delete: PendingStatement(
         sql: "DELETE FROM $listsRawTable WHERE id = ?",
-        params: [PendingStmtValueId()],
+        params: [PendingStatementValue.id()],
       ),
     )
 ]);

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:powersync/powersync.dart';
-import 'package:powersync_flutter_demo/powersync.dart';
-import 'package:powersync_flutter_demo/raw_tables_helper.dart';
 
 import './list_item.dart';
 import './list_item_dialog.dart';
