@@ -19,16 +19,16 @@ void main() {
   _declareTests(
     'dart sync client',
     SyncOptions(
-      // ignore: deprecated_member_use_from_same_package
-      syncImplementation: SyncClientImplementation.dart,
-    ),
+        // ignore: deprecated_member_use_from_same_package
+        syncImplementation: SyncClientImplementation.dart,
+        retryDelay: Duration(milliseconds: 200)),
   );
 
   _declareTests(
     'rust sync client',
     SyncOptions(
-      syncImplementation: SyncClientImplementation.rust,
-    ),
+        syncImplementation: SyncClientImplementation.rust,
+        retryDelay: Duration(milliseconds: 200)),
   );
 }
 
@@ -104,8 +104,8 @@ void _declareTests(String name, SyncOptions options) {
       addTearDown(status.cancel);
 
       syncService.addKeepAlive();
-      await expectLater(
-          status, emits(isSyncStatus(connected: true, hasSynced: false)));
+      await expectLater(status,
+          emitsThrough(isSyncStatus(connected: true, hasSynced: false)));
       return status;
     }
 
@@ -416,7 +416,8 @@ void _declareTests(String name, SyncOptions options) {
             'data': [
               {
                 'checksum': 0,
-                'data': json.encode({'name': 'from local', 'email': 'local@example.org'}),
+                'data': json.encode(
+                    {'name': 'from local', 'email': 'local@example.org'}),
                 'op': 'PUT',
                 'op_id': '1',
                 'object_id': '1',
@@ -772,6 +773,58 @@ void _declareTests(String name, SyncOptions options) {
       // Should reconnect after delay.
       await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(syncService.controller.hasListener, isTrue);
+    });
+
+    test('uploads writes made while offline', () async {
+      // Local write while not connected
+      await database.execute(
+          'insert into customers (id, name) values (uuid(), ?)',
+          ['local customer']);
+      uploadData = (db) async {
+        final batch = await db.getNextCrudTransaction();
+        if (batch != null) {
+          await batch.complete();
+        }
+      };
+      syncService.writeCheckpoint = () => {
+            'data': {'write_checkpoint': '1'}
+          };
+
+      final query = StreamQueue(database
+          .watch('SELECT name FROM customers')
+          .map((e) => e.single['name']));
+      expect(await query.next, 'local customer');
+
+      await waitForConnection();
+
+      syncService
+        ..addLine({
+          'checkpoint': Checkpoint(
+            lastOpId: '1',
+            writeCheckpoint: '1',
+            checksums: [BucketChecksum(bucket: 'a', priority: 3, checksum: 0)],
+          )
+        })
+        ..addLine({
+          'data': {
+            'bucket': 'a',
+            'data': <Map<String, Object?>>[
+              {
+                'op_id': '1',
+                'op': 'PUT',
+                'object_type': 'customers',
+                'object_id': '1',
+                'checksum': 0,
+                'data': json.encode({'name': 'from server'}),
+              }
+            ],
+          }
+        })
+        ..addLine({
+          'checkpoint_complete': {'last_op_id': '1'}
+        });
+
+      expect(await query.next, 'from server');
     });
   });
 }

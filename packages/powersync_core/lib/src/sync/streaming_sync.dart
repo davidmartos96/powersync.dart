@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
-import 'package:powersync_core/powersync_core.dart';
 import 'package:powersync_core/src/abort_controller.dart';
 import 'package:powersync_core/src/exceptions.dart';
 import 'package:powersync_core/src/log_internal.dart';
@@ -33,7 +32,7 @@ abstract interface class StreamingSync {
 
 @internal
 class StreamingSyncImplementation implements StreamingSync {
-  final Schema? schema; //TODO(SkillDevs): pass in all implementations
+  final String schemaJson;
   final BucketStorage adapter;
   final InternalConnector connector;
   final ResolvedSyncOptions options;
@@ -64,7 +63,7 @@ class StreamingSyncImplementation implements StreamingSync {
   String? clientId;
 
   StreamingSyncImplementation({
-    required this.schema,
+    required this.schemaJson,
     required this.adapter,
     required this.connector,
     required this.crudUpdateTriggerStream,
@@ -589,6 +588,7 @@ typedef BucketDescription = ({
 final class _ActiveRustStreamingIteration {
   final StreamingSyncImplementation sync;
   var _isActive = true;
+  var _hadSyncLine = false;
 
   StreamSubscription<void>? _completedUploads;
   final Completer<void> _completedStream = Completer();
@@ -598,12 +598,11 @@ final class _ActiveRustStreamingIteration {
   Future<void> syncIteration() async {
     try {
       await _control(
-        'start',
-        convert.json.encode({
-          'parameters': sync.options.params,
-          'schema': sync.schema,
-        }),
-      );
+          'start',
+          convert.json.encode({
+            'parameters': sync.options.params,
+            'schema': convert.json.decode(sync.schemaJson),
+          }));
       assert(_completedStream.isCompleted, 'Should have started streaming');
       await _completedStream.future;
     } finally {
@@ -629,8 +628,10 @@ final class _ActiveRustStreamingIteration {
 
       switch (event) {
         case ReceivedLine(line: final Uint8List line):
+          _triggerCrudUploadOnFirstLine();
           await _control('line_binary', line);
         case ReceivedLine(line: final line as String):
+          _triggerCrudUploadOnFirstLine();
           await _control('line_text', line);
         case UploadCompleted():
           await _control('completed_upload');
@@ -639,6 +640,17 @@ final class _ActiveRustStreamingIteration {
         case TokenRefreshComplete():
           await _control('refreshed_token');
       }
+    }
+  }
+
+  /// Triggers a local CRUD upload when the first sync line has been received.
+  ///
+  /// This allows uploading local changes that have been made while offline or
+  /// disconnected.
+  void _triggerCrudUploadOnFirstLine() {
+    if (!_hadSyncLine) {
+      sync._internalCrudTriggerController.add(null);
+      _hadSyncLine = true;
     }
   }
 

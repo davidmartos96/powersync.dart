@@ -156,6 +156,8 @@ Future<String> getDatabasePath() async {
   return join(dir.path, dbFilename);
 }
 
+const options = SyncOptions(syncImplementation: SyncClientImplementation.rust);
+
 Future<void> openDatabase() async {
   final dbPath = await getDatabasePath();
   print("Opening database at $dbPath");
@@ -182,10 +184,7 @@ Future<void> openDatabase() async {
     // If the user is already logged in, connect immediately.
     // Otherwise, connect once logged in.
     currentConnector = SupabaseConnector();
-    db.connect(
-      connector: currentConnector,
-      options: SyncOptions(syncImplementation: SyncClientImplementation.rust),
-    );
+    db.connect(connector: currentConnector, options: options);
   }
 
   Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
@@ -193,7 +192,7 @@ Future<void> openDatabase() async {
     if (event == AuthChangeEvent.signedIn) {
       // Connect to PowerSync when the user is signed in
       currentConnector = SupabaseConnector();
-      db.connect(connector: currentConnector!);
+      db.connect(connector: currentConnector!, options: options);
     } else if (event == AuthChangeEvent.signedOut) {
       // Implicit sign out - disconnect, but don't delete data
       currentConnector = null;
