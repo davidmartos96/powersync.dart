@@ -17,14 +17,12 @@ Future<void> initializeRawTablesSchema(PowerSyncDatabase db) async {
     }
 
     if (schemaVersion > latestSchemaVersion) {
-      throw Exception(
-          "Database is in a newer version than expected ($schemaVersion)");
+      throw Exception("Database is in a newer version than expected ($schemaVersion)");
     }
 
     print("Migrating from custom db schema version $schemaVersion to $latestSchemaVersion");
     for (var i = schemaVersion; i < latestSchemaVersion; i++) {
-      assert(_migrationsMap.containsKey(i),
-          'Migrations map is missing migration from version $i');
+      assert(_migrationsMap.containsKey(i), 'Migrations map is missing migration from version $i');
       await _migrationsMap[i]!(ctx);
     }
 
@@ -57,34 +55,29 @@ CREATE TABLE IF NOT EXISTS $listsRawTable(
 
 Future<void> _createInsertListTriggers(SqliteWriteContext ctx) async {
   final table = listsRawTable;
-  final dataJsonExpr = 'json(${_buildJsonObjectExpression(
+  final dataJsonExpr = _buildJsonObjectExpression(
     columns: [
       'created_at',
       'name',
       'owner_id',
     ],
     columnPrefix: 'NEW',
-  )})';
+  );
 
   await ctx.execute('''
 CREATE TRIGGER IF NOT EXISTS ${table}_insert
 AFTER INSERT ON $table
 FOR EACH ROW
-WHEN NOT powersync_in_sync_operation()
 BEGIN
-  INSERT INTO powersync_crud_(data) VALUES(json_object('op', 'PUT', 'type', '$table', 'id', NEW.id, 'data', $dataJsonExpr));
-  INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', NEW.id);
-  INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
+  INSERT INTO powersync_crud (op, id, type, data) VALUES('PUT',NEW.id, '$table', $dataJsonExpr);
 END;
 ''');
 }
 
-String _buildJsonObjectExpression(
-    {required List<String> columns, String? columnPrefix}) {
+String _buildJsonObjectExpression({required List<String> columns, String? columnPrefix}) {
   final list = columns.map((columnName) {
     final String key = "'$columnName'";
-    final String value =
-        columnPrefix != null ? '$columnPrefix.$columnName' : columnName;
+    final String value = columnPrefix != null ? '$columnPrefix.$columnName' : columnName;
     return '$key, $value';
   }).join(', ');
 
@@ -151,8 +144,7 @@ Future<void> _setupSchemaVersionTable(PowerSyncDatabase db) async {
   ''');
 
     // If no version is recorded, insert the initial version.
-    final result =
-        await ctx.get('SELECT COUNT(*) as count FROM $_versionTable;');
+    final result = await ctx.get('SELECT COUNT(*) as count FROM $_versionTable;');
     final count = result['count'] as int;
     if (count == 0) {
       await ctx.execute('INSERT INTO $_versionTable (version) VALUES (0);');
