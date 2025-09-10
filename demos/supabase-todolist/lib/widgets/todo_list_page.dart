@@ -34,7 +34,14 @@ class TodoListPage extends StatelessWidget {
     return Scaffold(
         appBar: StatusAppBar(title: Text(list.name)),
         floatingActionButton: button,
-        body: TodoListWidget(list: list));
+        body: Column(
+          children: [
+            FilledButton(onPressed: () async {
+              await list.updateName(list.name + " (renamed)");
+            }, child: Text("Rename list")),
+            Expanded(child: TodoListWidget(list: list)),
+          ],
+        ));
   }
 }
 

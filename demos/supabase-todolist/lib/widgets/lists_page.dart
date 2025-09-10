@@ -31,7 +31,6 @@ class ListsPage extends StatelessWidget {
       tooltip: 'Create List',
       child: const Icon(Icons.add),
     );
-
     final page = MyHomePage(
       title: 'Todo Lists',
       content: content,

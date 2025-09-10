@@ -5,6 +5,7 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:powersync/powersync.dart';
 import 'package:powersync_flutter_demo/migrations/fts_setup.dart';
+import 'package:powersync_flutter_demo/raw_tables_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import './app_config.dart';
@@ -49,14 +50,8 @@ class SupabaseConnector extends PowerSyncBackendConnector {
 
     // userId and expiresAt are for debugging purposes only
     final userId = session.user.id;
-    final expiresAt = session.expiresAt == null
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
-    return PowerSyncCredentials(
-        endpoint: AppConfig.powersyncUrl,
-        token: token,
-        userId: userId,
-        expiresAt: expiresAt);
+    final expiresAt = session.expiresAt == null ? null : DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
+    return PowerSyncCredentials(endpoint: AppConfig.powersyncUrl, token: token, userId: userId, expiresAt: expiresAt);
   }
 
   @override
@@ -97,6 +92,8 @@ class SupabaseConnector extends PowerSyncBackendConnector {
       for (var op in transaction.crud) {
         lastOp = op;
 
+        log.info("Upload op: ${op.op} ${op.table} ${op.id} ${op.opData}");
+
         final table = rest.from(op.table);
         if (op.op == UpdateType.put) {
           var data = Map<String, dynamic>.of(op.opData!);
@@ -112,8 +109,7 @@ class SupabaseConnector extends PowerSyncBackendConnector {
       // All operations successful.
       await transaction.complete();
     } on PostgrestException catch (e) {
-      if (e.code != null &&
-          fatalResponseCodes.any((re) => re.hasMatch(e.code!))) {
+      if (e.code != null && fatalResponseCodes.any((re) => re.hasMatch(e.code!))) {
         /// Instead of blocking the queue with these errors,
         /// discard the (rest of the) transaction.
         ///
@@ -156,10 +152,20 @@ Future<String> getDatabasePath() async {
 const options = SyncOptions(syncImplementation: SyncClientImplementation.rust);
 
 Future<void> openDatabase() async {
+  final dbPath = await getDatabasePath();
+  print("Opening database at $dbPath");
   // Open the local database
   db = PowerSyncDatabase(
-      schema: schema, path: await getDatabasePath(), logger: attachedLogger);
+    schema: schema,
+    path: dbPath,
+    logger: attachedLogger,
+  );
   await db.initialize();
+
+  if (manualSchemaMngmtMode) {
+    await initializeRawTablesSchema(db);
+    await db.updateSchema(schema);
+  }
 
   await loadSupabase();
 

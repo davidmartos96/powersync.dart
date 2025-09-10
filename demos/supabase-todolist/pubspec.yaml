@@ -10,8 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  powersync_attachments_helper: ^0.6.19
-  powersync: ^1.15.2
+  powersync_attachments_helper: ^0.6.18+9
+  powersync: ^1.14.0
   path_provider: ^2.1.1
   supabase_flutter: ^2.0.1
   path: ^1.8.3
@@ -29,7 +29,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  config:
-    # PowerSync supports SPM, but we want to disable it in this demo so that we can keep testing
-    # the CocoaPods parts of powersync_flutter_libs.
-    enable-swift-package-manager: false

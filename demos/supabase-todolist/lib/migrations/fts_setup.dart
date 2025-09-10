@@ -62,11 +62,11 @@ SqliteMigration createFtsMigration(
 /// with the data you would like to search on
 Future<void> configureFts(PowerSyncDatabase db) async {
   migrations
-    ..add(createFtsMigration(
-        migrationVersion: 1,
-        tableName: 'lists',
-        columns: ['name'],
-        tokenizationMethod: 'porter unicode61'))
+    // ..add(createFtsMigration(
+    //     migrationVersion: 1,
+    //     tableName: 'lists',
+    //     columns: ['name'],
+    //     tokenizationMethod: 'porter unicode61'))
     ..add(createFtsMigration(
       migrationVersion: 2,
       tableName: 'todos',

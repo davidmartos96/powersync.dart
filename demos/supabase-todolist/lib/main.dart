@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:powersync_flutter_demo/app_config.dart';
@@ -14,7 +13,8 @@ import './widgets/status_app_bar.dart';
 
 void main() async {
   Logger.root.level = Level.INFO;
-  Logger.root.onRecord.listen((record) {
+  // Logs are appearing twice
+  /*  Logger.root.onRecord.listen((record) {
     if (kDebugMode) {
       print(
           '[${record.loggerName}] ${record.level.name}: ${record.time}: ${record.message}');
@@ -26,7 +26,7 @@ void main() async {
         print(record.stackTrace);
       }
     }
-  });
+  }); */
 
   WidgetsFlutterBinding
       .ensureInitialized(); //required to get sqlite filepath from path_provider before UI has initialized
