@@ -105,16 +105,13 @@ Future<void> _createUpdateListTrigger(SqliteWriteContext ctx) async {
 CREATE TRIGGER ${table}_update
 AFTER UPDATE ON $table
 FOR EACH ROW
-WHEN NOT powersync_in_sync_operation()
 BEGIN
   SELECT CASE
   WHEN (OLD.id != NEW.id)
   THEN RAISE (FAIL, 'Cannot update id')
   END;
-  INSERT INTO powersync_crud_(data, options)
-  VALUES(json_object('op', 'PATCH', 'type', '$table', 'id', NEW.id, 'data', json(powersync_diff($oldRowJsonObj, $newRowJsonObj))), 0);
-  INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', NEW.id);
-  INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
+  INSERT INTO powersync_crud (op, id, type, data)
+  VALUES('PATCH', NEW.id, '$table', powersync_diff($oldRowJsonObj, $newRowJsonObj));
 END
 ''');
 }
@@ -125,11 +122,8 @@ Future<void> _createDeleteListTrigger(SqliteWriteContext ctx) async {
 CREATE TRIGGER ${table}_delete
 AFTER DELETE ON $table
 FOR EACH ROW
-WHEN NOT powersync_in_sync_operation()
 BEGIN
-  INSERT INTO powersync_crud_(data) VALUES(json_object('op', 'DELETE', 'type', '$table', 'id', OLD.id));
-  INSERT OR IGNORE INTO ps_updated_rows(row_type, row_id) VALUES('$table', OLD.id);
-  INSERT OR REPLACE INTO ps_buckets(name, last_op, target_op) VALUES('\$local', 0, 9223372036854775807);
+  INSERT INTO powersync_crud (op, type, id) VALUES('DELETE', '$table', OLD.id);
 END
 ''');
 }
