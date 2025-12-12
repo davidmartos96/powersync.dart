@@ -1,3 +1,5 @@
+## 1.17.0
+
 ## 1.16.2
 
  - Support latest version of sqlite_async.

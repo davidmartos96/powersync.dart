@@ -1,3 +1,7 @@
+## 0.1.15
+
+ - **FEAT**: Update core to 0.4.10 ([#361](https://github.com/powersync-ja/powersync.dart/issues/361)). ([d28dcd9d](https://github.com/powersync-ja/powersync.dart/commit/d28dcd9d8e94d90f57dd3b002717e79af7654eca))
+
 ## 0.1.14
 
  - Support latest version of sqlite_async.
