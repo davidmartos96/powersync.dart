@@ -429,10 +429,10 @@ packages:
     dependency: transitive
     description:
       name: devtools_shared
-      sha256: d626d5d6d0c98c803d5b58f72ded629f24ca3a4101facf1ac715481eb6fbf314
+      sha256: "5ab724cfd36ef4b0e47ef4719527be61ba262c5cfdb8522535f9bad7aa862556"
       url: "https://pub.dev"
     source: hosted
-    version: "13.0.0"
+    version: "13.0.1"
   drift:
     dependency: transitive
     description:
@@ -1737,10 +1737,10 @@ packages:
     dependency: transitive
     description:
       name: url_launcher_web
-      sha256: d0412fcf4c6b31ecfdb7762359b7206ffba3bbffd396c6d9f9c4616ece476c1f
+      sha256: "85c81589622fbc87c1c683aaea164d3604a7777495a79d91e39ffcdec39ddb34"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.2"
+    version: "2.4.3"
   url_launcher_windows:
     dependency: transitive
     description:

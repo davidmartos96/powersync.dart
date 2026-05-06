@@ -1,10 +1,12 @@
 import 'package:powersync/powersync.dart';
 import 'package:powersync_flutter_demo/models/schema.dart';
+import 'package:powersync_flutter_demo/utils.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
 // A table to hold a custom schema version number
 const _versionTable = 'custom_schema_version';
 const latestSchemaVersion = 1;
+const listsRawTable = "lists";
 
 Future<void> initializeRawTablesSchema(PowerSyncDatabase db) async {
   await _setupSchemaVersionTable(db);
@@ -17,12 +19,15 @@ Future<void> initializeRawTablesSchema(PowerSyncDatabase db) async {
     }
 
     if (schemaVersion > latestSchemaVersion) {
-      throw Exception("Database is in a newer version than expected ($schemaVersion)");
+      throw Exception(
+          "Database is in a newer version than expected ($schemaVersion)");
     }
 
-    print("Migrating from custom db schema version $schemaVersion to $latestSchemaVersion");
+    print(
+        "Migrating from custom db schema version $schemaVersion to $latestSchemaVersion");
     for (var i = schemaVersion; i < latestSchemaVersion; i++) {
-      assert(_migrationsMap.containsKey(i), 'Migrations map is missing migration from version $i');
+      assert(_migrationsMap.containsKey(i),
+          'Migrations map is missing migration from version $i');
       await _migrationsMap[i]!(ctx);
     }
 
@@ -36,10 +41,12 @@ Map<int, Future<void> Function(SqliteWriteContext)> _migrationsMap = {
 
 Future<void> _migrateFrom0(SqliteWriteContext ctx) async {
   await _createListsRawTable(ctx);
-  // Triggers
-  await _createInsertListTriggers(ctx);
-  await _createUpdateListTrigger(ctx);
-  await _createDeleteListTrigger(ctx);
+  await _createTodosRawTable(ctx);
+  await createRawTableTriggers(ctx, "lists",
+      idCols: ["id"], tableCols: listCols.map((col) => col.name).toList());
+  await createRawTableTriggers(ctx, "todos",
+      idCols: ["id"], tableCols: todosCols.map((col) => col.name).toList());
+  print("Applied migrations");
 }
 
 Future<void> _createListsRawTable(SqliteWriteContext ctx) async {
@@ -49,7 +56,23 @@ CREATE TABLE IF NOT EXISTS $listsRawTable(
   created_at TEXT NOT NULL,
   name TEXT NOT NULL,
   owner_id TEXT NOT NULL
-) STRICT;
+) ;
+''');
+}
+
+Future<void> _createTodosRawTable(SqliteWriteContext ctx) async {
+  await ctx.execute('''
+CREATE TABLE IF NOT EXISTS todos(
+  id TEXT NOT NULL PRIMARY KEY,
+  list_id TEXT NOT NULL,
+  photo_id TEXT ,
+  created_at TEXT NOT NULL,
+  completed_at TEXT ,
+  description TEXT NOT NULL,
+  completed INTEGER NOT NULL,
+  created_by TEXT ,
+  completed_by TEXT 
+) ;
 ''');
 }
 
@@ -74,10 +97,29 @@ END;
 ''');
 }
 
-String _buildJsonObjectExpression({required List<String> columns, String? columnPrefix}) {
+Future<void> _createInsertTodoTriggers(SqliteWriteContext ctx) async {
+  final table = listsRawTable;
+  final dataJsonExpr = _buildJsonObjectExpression(
+    columns: [],
+    columnPrefix: 'NEW',
+  );
+
+  await ctx.execute('''
+CREATE TRIGGER IF NOT EXISTS ${table}_insert
+AFTER INSERT ON $table
+FOR EACH ROW
+BEGIN
+  INSERT INTO powersync_crud (op, id, type, data) VALUES('PUT',NEW.id, '$table', $dataJsonExpr);
+END;
+''');
+}
+
+String _buildJsonObjectExpression(
+    {required List<String> columns, String? columnPrefix}) {
   final list = columns.map((columnName) {
     final String key = "'$columnName'";
-    final String value = columnPrefix != null ? '$columnPrefix.$columnName' : columnName;
+    final String value =
+        columnPrefix != null ? '$columnPrefix.$columnName' : columnName;
     return '$key, $value';
   }).join(', ');
 
@@ -138,7 +180,8 @@ Future<void> _setupSchemaVersionTable(PowerSyncDatabase db) async {
   ''');
 
     // If no version is recorded, insert the initial version.
-    final result = await ctx.get('SELECT COUNT(*) as count FROM $_versionTable;');
+    final result =
+        await ctx.get('SELECT COUNT(*) as count FROM $_versionTable;');
     final count = result['count'] as int;
     if (count == 0) {
       await ctx.execute('INSERT INTO $_versionTable (version) VALUES (0);');

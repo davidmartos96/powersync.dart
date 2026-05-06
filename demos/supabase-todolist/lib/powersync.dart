@@ -50,8 +50,14 @@ class SupabaseConnector extends PowerSyncBackendConnector {
 
     // userId and expiresAt are for debugging purposes only
     final userId = session.user.id;
-    final expiresAt = session.expiresAt == null ? null : DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
-    return PowerSyncCredentials(endpoint: AppConfig.powersyncUrl, token: token, userId: userId, expiresAt: expiresAt);
+    final expiresAt = session.expiresAt == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
+    return PowerSyncCredentials(
+        endpoint: AppConfig.powersyncUrl,
+        token: token,
+        userId: userId,
+        expiresAt: expiresAt);
   }
 
   @override
@@ -109,7 +115,8 @@ class SupabaseConnector extends PowerSyncBackendConnector {
       // All operations successful.
       await transaction.complete();
     } on PostgrestException catch (e) {
-      if (e.code != null && fatalResponseCodes.any((re) => re.hasMatch(e.code!))) {
+      if (e.code != null &&
+          fatalResponseCodes.any((re) => re.hasMatch(e.code!))) {
         /// Instead of blocking the queue with these errors,
         /// discard the (rest of the) transaction.
         ///
@@ -164,10 +171,8 @@ Future<void> openDatabase() async {
   );
   await db.initialize();
 
-  if (manualSchemaMngmtMode) {
-    await initializeRawTablesSchema(db);
-    await db.updateSchema(schema);
-  }
+  await initializeRawTablesSchema(db);
+  await db.updateSchema(schema);
 
   await loadSupabase();
 
@@ -198,7 +203,7 @@ Future<void> openDatabase() async {
 
   // Demo using SQLite Full-Text Search with PowerSync.
   // See https://docs.powersync.com/usage-examples/full-text-search for more details
-  await configureFts(db);
+  // await configureFts(db);
 }
 
 /// Explicit sign out - clear database and log out.
