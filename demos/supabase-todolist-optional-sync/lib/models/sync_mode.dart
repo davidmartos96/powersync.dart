@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:powersync/sqlite_async.dart';
+import 'package:sqlite_async/sqlite_async.dart';
 
 final migrations = SqliteMigrations()
   ..add(SqliteMigration(1, (tx) async {
@@ -13,7 +13,7 @@ late final SqliteDatabase sqliteDb;
 
 /// Using a local database to determine which schema to use in the PowerSync database
 /// Any other form of local storage could work here.
-openSyncModeDatabase() async {
+Future<void> openSyncModeDatabase() async {
   const dbFilename = 'system.db';
   var path = '';
   // getApplicationSupportDirectory is not supported on Web
@@ -45,7 +45,7 @@ Future<bool> getSyncEnabled() async {
   return rows[0]['sync_enabled'] == 'TRUE';
 }
 
-setSyncEnabled(bool enabled) async {
+Future<void> setSyncEnabled(bool enabled) async {
   var enabledString = enabled ? "TRUE" : "FALSE";
   await sqliteDb.execute(
       'INSERT OR REPLACE INTO local_system(id, sync_enabled) VALUES (1, ?);',

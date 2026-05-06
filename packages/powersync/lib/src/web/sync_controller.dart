@@ -1,0 +1,148 @@
+import 'dart:async';
+import 'dart:js_interop';
+
+import 'package:powersync/src/web/worker_utils.dart';
+import 'package:sqlite_async/web.dart';
+import 'package:web/web.dart';
+
+import '../connector.dart';
+import '../database/powersync_database.dart';
+import '../sync/options.dart';
+import '../sync/streaming_sync.dart';
+import '../sync/sync_status.dart';
+import 'sync_worker_protocol.dart';
+
+class SyncWorkerHandle implements StreamingSync {
+  final PowerSyncDatabase database;
+  final PowerSyncBackendConnector connector;
+  final SyncOptions options;
+  late final WorkerCommunicationChannel _channel;
+  List<SubscribedStream> subscriptions;
+
+  final StreamController<SyncStatus> _status = StreamController.broadcast();
+
+  SyncWorkerHandle._({
+    required this.database,
+    required this.connector,
+    required this.options,
+    required MessagePort sendToWorker,
+    required SharedWorker worker,
+    required this.subscriptions,
+  }) {
+    _channel = WorkerCommunicationChannel(
+      port: sendToWorker,
+      errors: EventStreamProviders.errorEvent.forTarget(worker),
+      logger: database.logger,
+      requestHandler: (type, payload) async {
+        switch (type) {
+          case SyncWorkerMessageType.requestEndpoint:
+            final endpoint = await (database.database as WebSqliteConnection)
+                .exposeEndpoint();
+
+            return (
+              WebEndpoint(
+                databaseName: endpoint.connectName,
+                databasePort: endpoint.connectPort,
+                lockName: endpoint.lockName,
+              ),
+              [endpoint.connectPort].toJS
+            );
+          case SyncWorkerMessageType.uploadCrud:
+            await connector.uploadData(database);
+            return (JSObject(), null);
+          case SyncWorkerMessageType.invalidCredentialsCallback:
+            final credentials = await connector.prefetchCredentials();
+            return (
+              credentials != null
+                  ? SerializedCredentials.from(credentials)
+                  : null,
+              null
+            );
+          case SyncWorkerMessageType.credentialsCallback:
+            final credentials = await connector.getCredentialsCached();
+            return (
+              credentials != null
+                  ? SerializedCredentials.from(credentials)
+                  : null,
+              null
+            );
+          default:
+            throw StateError('Unexpected message type $type');
+        }
+      },
+    );
+
+    _channel.events.listen((data) {
+      final (type, payload) = data;
+      if (type == SyncWorkerMessageType.notifySyncStatus) {
+        _status.add((payload as SerializedSyncStatus).asSyncStatus());
+      }
+    });
+  }
+
+  static Future<SyncWorkerHandle> start({
+    required PowerSyncDatabase database,
+    required PowerSyncBackendConnector connector,
+    required Uri workerUri,
+    required SyncOptions options,
+    required List<SubscribedStream> subscriptions,
+  }) async {
+    final worker = SharedWorker(workerUri.toString().toJS);
+    final MessageChannel(:port1, :port2) = MessageChannel();
+
+    // We can't use this port directly because the worker is also used to host
+    // databases. So the first step is to establish a sync protocol channel on
+    // the shared worker.
+    worker.port.start();
+    worker.port.postMessage(
+      SharedWorkerMessage(
+        isForSyncWorker: true,
+        message: port2,
+      ),
+      [port2].toJS,
+    );
+
+    final handle = SyncWorkerHandle._(
+      options: options,
+      database: database,
+      connector: connector,
+      sendToWorker: port1,
+      worker: worker,
+      subscriptions: subscriptions,
+    );
+
+    // Make sure that the worker is working, or throw immediately.
+    await handle._channel.ping();
+
+    return handle;
+  }
+
+  Future<void> close() async {
+    await abort();
+    await _channel.close();
+  }
+
+  @override
+  Future<void> abort() async {
+    await _channel.abortSynchronization();
+  }
+
+  @override
+  Stream<SyncStatus> get statusStream => _status.stream;
+
+  @override
+  Future<void> streamingSync() async {
+    await _channel.startSynchronization(
+      database.database.openFactory.path,
+      ResolvedSyncOptions(options),
+      database.schema,
+      subscriptions,
+    );
+  }
+
+  @override
+  void updateSubscriptions(List<SubscribedStream> streams) {
+    subscriptions = streams;
+    _channel.updateSubscriptions(streams);
+  }
+}

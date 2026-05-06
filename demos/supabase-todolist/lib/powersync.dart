@@ -149,7 +149,9 @@ Future<String> getDatabasePath() async {
   return join(dir.path, dbFilename);
 }
 
-const options = SyncOptions(syncImplementation: SyncClientImplementation.rust);
+const options = SyncOptions(
+    syncImplementation: SyncClientImplementation.rust,
+    appMetadata: {'app_version': '1.0.1'});
 
 Future<void> openDatabase() async {
   final dbPath = await getDatabasePath();

@@ -1,3 +1,27 @@
+## 0.5.0+eol
+
+- This package no longer does anything. Loading the core extension now happens through build hooks.
+
+## 0.4.15+1
+
+ - Fix outdated core extension version on Android.
+
+ - **FIX**: bump Android powersync-sqlite-core to 0.4.11. ([aa14097c](https://github.com/powersync-ja/powersync.dart/commit/aa14097c247c28042bec6f2aabb825a895953500))
+
+## 0.4.15
+
+## 0.4.14
+
+ - **FEAT**: Update core to 0.4.10 ([#361](https://github.com/powersync-ja/powersync.dart/issues/361)). ([d28dcd9d](https://github.com/powersync-ja/powersync.dart/commit/d28dcd9d8e94d90f57dd3b002717e79af7654eca))
+
+## 0.4.13
+
+ - Android: Raise compileSdk version to 36.
+
+## 0.4.12
+
+ - Update core extension, add support for SwiftPM.
+
 ## 0.4.11
 
  - Update PowerSync core extension to version 0.4.4.

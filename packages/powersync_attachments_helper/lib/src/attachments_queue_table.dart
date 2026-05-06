@@ -1,5 +1,5 @@
-import 'package:powersync_core/powersync_core.dart';
-import 'package:powersync_core/sqlite3_common.dart' as sqlite;
+import 'package:powersync/powersync.dart';
+import 'package:sqlite3/common.dart' as sqlite;
 
 const defaultAttachmentsQueueTableName = 'attachments_queue';
 
@@ -68,7 +68,8 @@ class Attachment {
 /// 4. Attachment to be archived
 enum AttachmentState { queuedUpload, queuedDownload, queuedDelete, archived }
 
-class AttachmentsQueueTable extends Table {
+// ignore: deprecated_subclass
+final class AttachmentsQueueTable extends Table {
   AttachmentsQueueTable(
       {String attachmentsQueueTableName = defaultAttachmentsQueueTableName,
       List<Column> additionalColumns = const [],

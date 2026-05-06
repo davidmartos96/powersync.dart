@@ -5,15 +5,7 @@ This demo also uses [riverpod](https://riverpod.dev) to highlight best practices
 
 Notes about the Drift usage are [further below](#drift).
 
-# Running the app
-
-Ensure you have [melos](https://melos.invertase.dev/~melos-latest/getting-started) installed.
-
-1. `cd demos/supabase-todolist-drift`
-2. `melos prepare`
-3. `cp lib/app_config_template.dart lib/app_config.dart`
-4. Insert your Supabase and PowerSync project credentials into `lib/app_config.dart` (See instructions below)
-5. `flutter run`
+To run this demo, you need to have properly configured Supabase and PowerSync projects. Follow the instructions below to set these up.
 
 # Set up Supabase Project
 
@@ -32,21 +24,33 @@ It does the following:
 
 Create a new PowerSync instance, connecting to the database of the Supabase project.
 
-Then deploy the following sync rules:
+Then deploy the following Sync Streams config (with `auto_subscribe: true` so the client syncs the user's data on connect):
 
 ```yaml
-bucket_definitions:
-  user_lists:
-    # Separate bucket per todo list
-    parameters: select id as list_id from lists where owner_id = request.user_id()
-    data:
-      - select * from lists where id = bucket.list_id
-      - select * from todos where list_id = bucket.list_id
+config:
+  edition: 3
+
+streams:
+  user_data:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM lists WHERE owner_id = auth.user_id()
+      - SELECT todos.* FROM todos INNER JOIN lists ON todos.list_id = lists.id WHERE lists.owner_id = auth.user_id()
 ```
 
 # Configure the app
 
 Insert the credentials of your new Supabase and PowerSync projects into `lib/app_config.dart`
+
+# Run the app
+
+Ensure you have [melos](https://melos.invertase.dev/~melos-latest/getting-started) installed.
+
+1. `cd demos/supabase-todolist-drift`
+2. `melos prepare`
+3. `cp lib/app_config_template.dart lib/app_config.dart`
+4. Insert your Supabase and PowerSync project credentials into `lib/app_config.dart` (See instructions below)
+5. `flutter run`
 
 # Drift
 

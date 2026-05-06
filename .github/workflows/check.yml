@@ -7,55 +7,64 @@ on:
   push:
     branches:
       - "**"
+  pull_request:
 
 jobs:
   setup:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
     uses: ./.github/workflows/prepare_wasm.yml
 
   build:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
     needs: [setup]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/prepare
       - name: Check formatting
-        run: melos format:check:packages
+        run:  dart format --set-exit-if-changed -o none .
+      - name: Prepare templates for analysis
+        # Copy templates to make dart analyze work in demos
+        run: |
+          find . -name "app_config_template.dart" -exec sh -c 'cp "$1" "$(dirname "$1")/app_config.dart"' _ {} \;
+          touch demos/supabase-trello/.env
       - name: Lint
-        run: melos analyze:packages
+        run: dart analyze --fatal-infos --fatal-warnings
+      - name: Build DevTools extension
+        run: ./tool/build.sh
+        working-directory: packages/powersync_devtools_extension
       - name: Publish dry-run
         run: melos publish --dry-run --yes
 
   pana:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
     needs: [setup]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/prepare
-      - name: Check pana score
-        run: |
-          flutter pub global activate pana
-          melos analyze:packages:pana --no-select
+
+      - name: Install pana
+        run: dart pub global activate pana
+
+      - name: Check powersync package
+        run: dart pub global run pana --no-warning --exit-code-threshold 10
+        working-directory: packages/powersync
 
   test:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
     needs: [setup]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/prepare
-      - name: Run flutter tests
-        run: melos test
-      - name: Run dart tests
-        run: melos test:web
+      - name: Test powersync package
+        working-directory: packages/powersync
+        run: dart test -p chrome,vm
 
-  check_demos:
-    runs-on: ubuntu-latest
-    needs: [setup]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/prepare
-      - name: Check formatting
-        run: melos format:check:demos
-      - name: Lint
-        run: |
-          ./.github/workflows/scripts/copy-config.sh
-          melos analyze:demos
+      - name: Enable encryption
+        run: dart tool/enable_encryption.dart
+
+      - name: Encryption tests
+        working-directory: packages/powersync
+        run: dart test -p vm -P encryption

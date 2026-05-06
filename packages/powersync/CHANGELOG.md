@@ -1,3 +1,70 @@
+## 2.1.0
+
+- Add a DevTools extension to inspect running PowerSync databases in your app.
+
+## 2.0.2
+
+- Update PowerSync SQLite core extension to version 0.4.13.
+- Fix changes in active Sync Stream subscriptions causing a reconnect delay.
+
+## 2.0.1
+
+- Fix documentation not generating.
+
+## 2.0.0
+
+- Upgrade sqlite packages: Version 3.x of `sqlite3`, 0.6.x of `sqlite3_web`, 0.14.x of `sqlite_async`.
+  - Remember to download updated db workers and `sqlite3.wasm` files after upgrading!
+  - __Breaking__: Remove `package:powersync/sqlite3_open.dart`, since SQLite is now loaded through [build hooks](https://pub.dev/documentation/sqlite3/latest/topics/hook-topic.html) exclusively.
+  - __Breaking__: Remove `AbstractPowerSyncOpenFactory` and `PowerSyncOpenFactory`. If you want to customize how databases
+    are opened, use conditional imports for `package:powersync/native.dart` and `package:powersync/web.dart` to extend
+    `NativePowerSyncOpenFactory` or `WebPowerSyncOpenFactory`, respectively.
+  - Improve performance of native databases.
+  - Native databases can now be opened on multiple isolates or Flutter engines (e.g. for background tasks).
+    They will automatically share write locks and table updates. Note that only one instance may connect to the PowerSync service though.
+  - For Chrome browsers, we now use OPFS by default instead of IndexedDB. This improves performance. Existing databases are still loaded from IndexedDB.
+  - The `maxReaders` parameter on `PowerSyncDatabase` constructors is no longer functional, set that parameter on
+  `SqliteOptions` instead.
+  - Add `watchUnthrottled` and `onChangeUnthrottled` as variants of `watch` and `onChange` that only take backpressure
+    from paused subscriptions into account withut using a fixed delay.
+  - Add `abortableReadLock` and `abortableWriteLock`, which can be used to acquire a read/write context with a flexible
+    abort signal instead of a fixed timeout.
+- __Breaking__: The `powersync_core`, `powersync_sqlcipher` and `powersync_flutter_libs` packages have been removed.
+  The `powersync` package now provides the entire SDK for all platforms (both for Flutter and standalone Dart apps).
+- __Breaking__: The `powersync_sleep` and `powersync_connection_name` SQL functions have been removed. Also, it is
+  no longer possible to define additional user-defined functions in Dart.
+- Add encryption support to the `powersync` package (see the `EncryptionOptions` class for details).
+- Remove the legacy Dart sync client. The new Rust client has been the default since version 1.17.0.
+- Deprecate re-exports of other packages (`package:powersync/sqlite_async.dart`, `package:powersync/sqlite3_common.dart`,
+  `package:powersync/sqlite3.dart`). Instead, add a dependency on the respective package and import it directly.
+- Remove `powersync_sync.worker.js`. `powersync_db.worker.js` now covers both database access and sync.
+- Fix sync isolate retry loop ([#397](https://github.com/powersync-ja/powersync.dart/issues/397)).
+
+## 1.18.0
+
+- Add `RawTable.inferred` constructor, which can be used to specify raw tables without manual `put` and `delete` statements.
+- Update PowerSync SQLite core extension to version `0.4.11`.
+
+## 1.17.0
+
+ - **FEAT**: Custom App Metadata ([#354](https://github.com/powersync-ja/powersync.dart/issues/354)). ([8188bb90](https://github.com/powersync-ja/powersync.dart/commit/8188bb90b50eceb486e33cd5aa4b976c4a133899))
+ - **FEAT**: Update core to 0.4.10 ([#361](https://github.com/powersync-ja/powersync.dart/issues/361)). ([d28dcd9d](https://github.com/powersync-ja/powersync.dart/commit/d28dcd9d8e94d90f57dd3b002717e79af7654eca))
+
+## 1.16.2
+
+ - Support latest version of sqlite_async.
+
+## 1.16.1
+
+ - Web: Fix decoding sync streams on status.
+
+## 1.16.0
+
+- Add `getCrudTransactions()` returning a stream of completed transactions for uploads.
+- Add experimental support for [sync streams](https://docs.powersync.com/usage/sync-streams).
+- Add new attachments helper implementation in `package:powersync_core/attachments/attachments.dart`.
+- Add SwiftPM support.
+
 ## 1.15.2
 
  - Fix excessive memory consumption during large sync.

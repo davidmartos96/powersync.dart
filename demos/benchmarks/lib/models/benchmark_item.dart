@@ -1,4 +1,4 @@
-import 'package:powersync/sqlite3_common.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
 
 import '../powersync.dart';
 
@@ -38,7 +38,7 @@ class BenchmarkItem {
     });
   }
 
-  static updateItemBenchmarks() async {
+  static Future<void> updateItemBenchmarks() async {
     await for (var _ in db.onChange(['benchmark_items'],
         throttle: const Duration(milliseconds: 1))) {
       await db.execute(
@@ -58,7 +58,7 @@ class BenchmarkItem {
   }
 
   /// Find list item.
-  static Future<BenchmarkItem> find(id) async {
+  static Future<BenchmarkItem> find(String id) async {
     final results =
         await db.get('SELECT * FROM benchmark_items WHERE id = ?', [id]);
     return BenchmarkItem.fromRow(results);

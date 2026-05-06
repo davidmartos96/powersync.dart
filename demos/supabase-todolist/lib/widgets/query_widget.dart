@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:powersync/sqlite3_common.dart' as sqlite;
+import 'package:sqlite3/common.dart' as sqlite;
 
 import './resultset_table.dart';
 import '../powersync.dart';
@@ -42,7 +42,7 @@ class QueryWidgetState extends State<QueryWidget> {
     _subscription?.cancel();
   }
 
-  _refresh() async {
+  Future<void> _refresh() async {
     _subscription?.cancel();
     final stream = db.watch(_query);
     _subscription = stream.listen((data) {

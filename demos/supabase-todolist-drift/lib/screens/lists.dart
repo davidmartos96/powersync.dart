@@ -34,8 +34,8 @@ final class _ListsWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lists = ref.watch(listsNotifierProvider);
-    final didSync = ref.watch(didCompleteSyncProvider(BucketPriority(1)));
+    final lists = ref.watch(listsProvider);
+    final didSync = ref.watch(didCompleteSyncProvider(StreamPriority(1)));
 
     if (!didSync) {
       return const Text('Busy with sync...');
@@ -66,7 +66,7 @@ class ListItemWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Future<void> delete() async {
-      await ref.read(listsNotifierProvider.notifier).deleteList(list.self.id);
+      await ref.read(listsProvider.notifier).deleteList(list.self.id);
     }
 
     void viewList() {
