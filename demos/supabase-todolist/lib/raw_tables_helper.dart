@@ -71,7 +71,8 @@ CREATE TABLE IF NOT EXISTS todos(
   description TEXT NOT NULL,
   completed INTEGER NOT NULL,
   created_by TEXT ,
-  completed_by TEXT 
+  completed_by TEXT,
+  CONSTRAINT fk_lists FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 ) ;
 ''');
 }

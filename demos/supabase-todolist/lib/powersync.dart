@@ -173,6 +173,7 @@ Future<void> openDatabase() async {
 
   await initializeRawTablesSchema(db);
   await db.updateSchema(schema);
+  await db.execute("PRAGMA foreign_keys = ON");
 
   await loadSupabase();
 
